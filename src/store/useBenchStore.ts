@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Bench, BenchExperience, MaterialType, OrientationType, ShadeLevelType, NoiseLevelType, StayDurationType } from '@/types';
+import type { Bench, BenchExperience, MaterialType, OrientationType, ShadeLevelType, NoiseLevelType } from '@/types';
 import { loadBenches, saveBenches } from '@/utils/storage';
 import { generateId } from '@/utils/comfort';
 import { mockBenches } from '@/data/mockBenches';
+import { usePatrolMemberStore } from '@/business/patrolMemberStore';
 
 interface BenchState {
   benches: Bench[];
@@ -25,6 +26,7 @@ interface BenchActions {
   addBench: (bench: Omit<Bench, 'id' | 'createdAt' | 'updatedAt' | 'experiences'>) => void;
   updateBench: (id: string, updates: Partial<Bench>) => void;
   deleteBench: (id: string) => void;
+  toggleMaintenance: (id: string) => void;
   getBenchById: (id: string) => Bench | undefined;
   addExperience: (benchId: string, experience: Omit<BenchExperience, 'id' | 'benchId'>) => void;
   updateExperience: (benchId: string, expId: string, updates: Partial<BenchExperience>) => void;
@@ -91,10 +93,26 @@ export const useBenchStore = create<BenchState & BenchActions>((set, get) => ({
     );
     set({ benches: newBenches });
     saveBenches(newBenches);
+    // 评分/材质/位置变动时暂停对应巡护单（保留进度）
+    const updated = newBenches.find((bench) => bench.id === id);
+    if (updated) {
+      usePatrolMemberStore.getState().syncBenchChange(updated);
+    }
   },
 
   deleteBench: (id) => {
     const newBenches = get().benches.filter((bench) => bench.id !== id);
+    set({ benches: newBenches });
+    saveBenches(newBenches);
+    usePatrolMemberStore.getState().cancelOrdersForBench(id, '长椅档案已删除');
+  },
+
+  toggleMaintenance: (id) => {
+    const newBenches = get().benches.map((bench) =>
+      bench.id === id
+        ? { ...bench, underMaintenance: !bench.underMaintenance, updatedAt: new Date().toISOString() }
+        : bench
+    );
     set({ benches: newBenches });
     saveBenches(newBenches);
   },

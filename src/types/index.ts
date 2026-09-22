@@ -28,6 +28,7 @@ export interface Bench {
   rating: number;
   review: string;
   experiences: BenchExperience[];
+  underMaintenance?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,4 +85,62 @@ export const TIME_PERIOD_ICONS: Record<TimePeriodType, string> = {
   afternoon: 'cloud-sun',
   evening: 'sunset',
   night: 'moon',
+};
+
+// ---------- 结伴巡护 ----------
+
+export type PatrolRoleType = 'record' | 'photo' | 'inspect' | 'safety';
+export type PatrolMemberStatus = 'pending' | 'arrived' | 'completed' | 'quit';
+export type PatrolOrderStatus = 'active' | 'paused' | 'finished' | 'cancelled';
+
+export interface PatrolMember {
+  id: string;
+  name: string;
+  role: PatrolRoleType;
+  timeSlot: TimePeriodType;
+  status: PatrolMemberStatus;
+  arrivedAt?: string;
+  completedAt?: string;
+  quitAt?: string;
+  quitReason?: string;
+}
+
+/** 建单时的长椅快照，用于检测评分/材质/位置变动 */
+export interface BenchSnapshot {
+  rating: number;
+  material: MaterialType;
+  location: string;
+}
+
+export interface PatrolOrder {
+  id: string;
+  benchId: string;
+  benchName: string;
+  members: PatrolMember[];
+  status: PatrolOrderStatus;
+  snapshot: BenchSnapshot;
+  pauseReason?: string;
+  createdAt: string;
+  finishedAt?: string;
+}
+
+export const PATROL_ROLE_LABELS: Record<PatrolRoleType, string> = {
+  record: '巡查记录',
+  photo: '拍照存档',
+  inspect: '设施检查',
+  safety: '安全观察',
+};
+
+export const PATROL_MEMBER_STATUS_LABELS: Record<PatrolMemberStatus, string> = {
+  pending: '待到达',
+  arrived: '已到达',
+  completed: '已完成',
+  quit: '已退出',
+};
+
+export const PATROL_ORDER_STATUS_LABELS: Record<PatrolOrderStatus, string> = {
+  active: '巡护中',
+  paused: '已暂停',
+  finished: '已完成',
+  cancelled: '已终止',
 };

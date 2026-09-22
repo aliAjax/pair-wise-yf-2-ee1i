@@ -14,8 +14,11 @@ import {
   Sunset,
   Moon,
   CloudSun,
+  Wrench,
+  PauseCircle,
 } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
+import { usePatrolMemberStore } from '@/business/patrolMemberStore';
 import {
   MATERIAL_LABELS,
   ORIENTATION_LABELS,
@@ -31,14 +34,18 @@ import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils
 export default function BenchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBenchById, deleteBench, initialize, initialized } = useBenchStore();
+  const { getBenchById, deleteBench, toggleMaintenance, initialize, initialized } = useBenchStore();
+  const { orders, initialized: ordersReady, initialize: initOrders } = usePatrolMemberStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!initialized) {
       initialize();
     }
-  }, [initialized, initialize]);
+    if (!ordersReady) {
+      initOrders();
+    }
+  }, [initialized, ordersReady, initialize, initOrders]);
 
   const bench = id ? getBenchById(id) : undefined;
 
@@ -61,6 +68,10 @@ export default function BenchDetail() {
   const comfortScore = calculateComfortScore(bench);
   const comfortLevel = getComfortLevel(comfortScore);
   const comfortColor = getComfortColor(comfortScore);
+
+  const pausedOrder = orders.find(
+    (o) => o.benchId === bench.id && o.status === 'paused',
+  );
 
   const timePeriodIcons: Record<TimePeriodType, typeof Sunrise> = {
     morning: Sunrise,
@@ -94,6 +105,15 @@ export default function BenchDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {pausedOrder && (
+            <div className="p-4 bg-ochre/10 border border-ochre/30 rounded-xl flex items-center gap-2 text-ochre text-sm fade-in">
+              <PauseCircle className="w-5 h-5 flex-shrink-0" />
+              <span>
+                {pausedOrder.pauseReason || '巡护已暂停'}，进度已保留；恢复前该长椅排行暂不更新。
+              </span>
+            </div>
+          )}
+
           <div className="paper-texture rounded-xl shadow-paper overflow-hidden fade-in opacity-0 stagger-1">
             <div className="h-48 bg-gradient-to-br from-warm-cream via-warm-beige to-moss-green/10 relative">
               <div className="absolute inset-0 flex items-center justify-center">
@@ -106,9 +126,17 @@ export default function BenchDetail() {
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h1 className="font-serif text-2xl font-bold text-deep-brown mb-2">
-                    {bench.name}
-                  </h1>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h1 className="font-serif text-2xl font-bold text-deep-brown">
+                      {bench.name}
+                    </h1>
+                    {bench.underMaintenance && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-500 flex items-center gap-1">
+                        <Wrench className="w-3 h-3" />
+                        维护中
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 text-ink-light">
                     <MapPin className="w-4 h-4 flex-shrink-0" />
                     <span>{bench.location}</span>
@@ -194,6 +222,17 @@ export default function BenchDetail() {
 
                 <div className="flex-1" />
 
+                <button
+                  onClick={() => toggleMaintenance(bench.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    bench.underMaintenance
+                      ? 'text-red-500 hover:bg-red-50'
+                      : 'text-ink-light hover:bg-deep-brown/5'
+                  }`}
+                >
+                  <Wrench className="w-4 h-4" />
+                  {bench.underMaintenance ? '解除维护' : '设为维护中'}
+                </button>
                 <button
                   onClick={() => navigate(`/edit/${bench.id}`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-moss-green hover:bg-moss-green/10 rounded-lg transition-colors"

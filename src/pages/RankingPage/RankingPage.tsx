@@ -1,22 +1,31 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, MapPin, Star, Crown, Medal, Award } from 'lucide-react';
+import { Trophy, MapPin, Star, Crown, Medal, Award, PauseCircle } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
+import { usePatrolMemberStore } from '@/business/patrolMemberStore';
+import { isRankingFrozen } from '@/business/patrolRules';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
 import { MATERIAL_LABELS, SHADE_LABELS } from '@/types';
-import type { Bench } from '@/types';
 
 export default function RankingPage() {
   const { benches, initialize, initialized } = useBenchStore();
+  const { orders, initialized: ordersReady, initialize: initOrders } = usePatrolMemberStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!initialized) {
       initialize();
     }
-  }, [initialized, initialize]);
+    if (!ordersReady) {
+      initOrders();
+    }
+  }, [initialized, ordersReady, initialize, initOrders]);
 
-  const rankedBenches = [...benches]
+  // 巡护暂停中的长椅排行冻结，恢复前不参与排名更新
+  const activeBenches = benches.filter((bench) => !isRankingFrozen(bench.id, orders));
+  const frozenBenches = benches.filter((bench) => isRankingFrozen(bench.id, orders));
+
+  const rankedBenches = [...activeBenches]
     .sort((a, b) => calculateComfortScore(b) - calculateComfortScore(a))
     .map((bench, index) => ({ bench, rank: index + 1 }));
 
@@ -120,7 +129,7 @@ export default function RankingPage() {
         })}
       </div>
 
-      {rankedBenches.length === 0 && (
+      {rankedBenches.length === 0 && frozenBenches.length === 0 && (
         <div className="paper-texture rounded-xl shadow-paper p-12 text-center">
           <div className="w-16 h-16 rounded-full bg-moss-green/10 flex items-center justify-center mx-auto mb-4">
             <Trophy className="w-8 h-8 text-moss-green/50" />
@@ -131,6 +140,44 @@ export default function RankingPage() {
           <p className="text-ink-light text-sm">
             添加一些长椅档案后，这里会显示舒适度排行榜
           </p>
+        </div>
+      )}
+
+      {frozenBenches.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-serif text-lg font-semibold text-deep-brown mb-3 flex items-center gap-2">
+            <PauseCircle className="w-5 h-5 text-ochre" />
+            排行冻结中
+          </h3>
+          <div className="space-y-3">
+            {frozenBenches.map((bench) => (
+              <div
+                key={bench.id}
+                onClick={() => navigate(`/bench/${bench.id}`)}
+                className="paper-texture rounded-xl shadow-paper p-4 border border-ochre/30 bg-ochre/5 cursor-pointer"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-ochre/10 flex items-center justify-center flex-shrink-0">
+                    <PauseCircle className="w-5 h-5 text-ochre" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-serif font-semibold text-deep-brown truncate mb-1">
+                      {bench.name}
+                    </h3>
+                    <div className="flex items-center gap-1 text-ink-light text-sm">
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{bench.location}</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-ochre font-medium text-right flex-shrink-0">
+                    巡护暂停中
+                    <br />
+                    恢复前排行暂不更新
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
