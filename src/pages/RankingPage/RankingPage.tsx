@@ -1,22 +1,31 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, MapPin, Star, Crown, Medal, Award } from 'lucide-react';
+import { Trophy, MapPin, Star, Crown, Medal, Award, Snowflake } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
+import { usePatrolStore } from '@/business/pageState';
+import { buildRankingBenches } from '@/business/patrolRules';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
 import { MATERIAL_LABELS, SHADE_LABELS } from '@/types';
-import type { Bench } from '@/types';
 
 export default function RankingPage() {
   const { benches, initialize, initialized } = useBenchStore();
+  const { orders, initialize: initPatrols } = usePatrolStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!initialized) {
       initialize();
     }
-  }, [initialized, initialize]);
+    initPatrols();
+  }, [initialized, initialize, initPatrols]);
 
-  const rankedBenches = [...benches]
+  // 暂停巡护中的长椅按变动前快照计分，恢复前排行不更新
+  const rankingBenches = buildRankingBenches(benches, orders);
+  const pausedBenchIds = new Set(
+    orders.filter((order) => order.status === 'paused').map((order) => order.benchId),
+  );
+
+  const rankedBenches = [...rankingBenches]
     .sort((a, b) => calculateComfortScore(b) - calculateComfortScore(a))
     .map((bench, index) => ({ bench, rank: index + 1 }));
 
@@ -72,6 +81,12 @@ export default function RankingPage() {
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${comfortColor} bg-white/80`}>
                       {comfortLevel}
                     </span>
+                    {pausedBenchIds.has(bench.id) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-sky-700 bg-sky-50">
+                        <Snowflake className="w-3 h-3" />
+                        排行冻结
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 text-ink-light text-sm mb-2">

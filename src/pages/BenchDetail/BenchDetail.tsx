@@ -14,8 +14,12 @@ import {
   Sunset,
   Moon,
   CloudSun,
+  Footprints,
+  Wrench,
 } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
+import { usePatrolStore } from '@/business/pageState';
+import { getActiveOrderForBench } from '@/business/patrolRules';
 import {
   MATERIAL_LABELS,
   ORIENTATION_LABELS,
@@ -23,6 +27,7 @@ import {
   NOISE_LABELS,
   STAY_DURATION_LABELS,
   TIME_PERIOD_LABELS,
+  PATROL_STATUS_LABELS,
 } from '@/types';
 import type { TimePeriodType } from '@/types';
 import Rating from '@/components/Rating/Rating';
@@ -31,16 +36,19 @@ import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils
 export default function BenchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBenchById, deleteBench, initialize, initialized } = useBenchStore();
+  const { getBenchById, deleteBench, setUnderMaintenance, initialize, initialized } = useBenchStore();
+  const { orders, initialize: initPatrols } = usePatrolStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!initialized) {
       initialize();
     }
-  }, [initialized, initialize]);
+    initPatrols();
+  }, [initialized, initialize, initPatrols]);
 
   const bench = id ? getBenchById(id) : undefined;
+  const activeOrder = id ? getActiveOrderForBench(orders, id) : undefined;
 
   useEffect(() => {
     if (bench === undefined && initialized) {
@@ -106,9 +114,17 @@ export default function BenchDetail() {
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h1 className="font-serif text-2xl font-bold text-deep-brown mb-2">
-                    {bench.name}
-                  </h1>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h1 className="font-serif text-2xl font-bold text-deep-brown">
+                      {bench.name}
+                    </h1>
+                    {bench.underMaintenance && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-ochre bg-ochre/10">
+                        <Wrench className="w-3 h-3" />
+                        维护中
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 text-ink-light">
                     <MapPin className="w-4 h-4 flex-shrink-0" />
                     <span>{bench.location}</span>
@@ -186,14 +202,40 @@ export default function BenchDetail() {
                 <p className="text-ink-light leading-relaxed">{bench.review}</p>
               </div>
 
-              <div className="flex items-center gap-4 pt-4 border-t border-deep-brown/10">
+              <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-deep-brown/10">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-ink-light">评分</span>
                   <Rating value={bench.rating} readOnly />
                 </div>
 
+                <label
+                  className={`flex items-center gap-2 text-sm ${
+                    activeOrder ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                  title={activeOrder ? '巡护进行中，暂不能切换维护状态' : '标记长椅是否维护中'}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!bench.underMaintenance}
+                    disabled={!!activeOrder}
+                    onChange={(e) => setUnderMaintenance(bench.id, e.target.checked)}
+                    className="accent-ochre w-4 h-4"
+                  />
+                  <span className="text-ink-light flex items-center gap-1">
+                    <Wrench className="w-3.5 h-3.5" />
+                    维护中
+                  </span>
+                </label>
+
                 <div className="flex-1" />
 
+                <button
+                  onClick={() => navigate(`/patrols/new?benchId=${bench.id}`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-moss-green hover:bg-moss-light rounded-lg transition-colors"
+                >
+                  <Footprints className="w-4 h-4" />
+                  发起巡护
+                </button>
                 <button
                   onClick={() => navigate(`/edit/${bench.id}`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-moss-green hover:bg-moss-green/10 rounded-lg transition-colors"
@@ -202,8 +244,13 @@ export default function BenchDetail() {
                   编辑
                 </button>
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  onClick={() => {
+                    if (activeOrder) return;
+                    setShowDeleteConfirm(true);
+                  }}
+                  disabled={!!activeOrder}
+                  title={activeOrder ? '该长椅有进行中的巡护，不能删除' : undefined}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-4 h-4" />
                   删除
@@ -214,6 +261,40 @@ export default function BenchDetail() {
         </div>
 
         <div className="space-y-6">
+          {activeOrder && (
+            <div
+              onClick={() => navigate(`/patrols/${activeOrder.id}`)}
+              className="paper-texture rounded-xl shadow-paper p-6 cursor-pointer card-hover fade-in opacity-0 stagger-1"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  activeOrder.status === 'paused' ? 'bg-ochre/10' : 'bg-moss-green/10'
+                }`}>
+                  <Footprints className={`w-5 h-5 ${
+                    activeOrder.status === 'paused' ? 'text-ochre' : 'text-moss-green'
+                  }`} />
+                </div>
+                <div>
+                  <h2 className="font-serif font-semibold text-deep-brown">
+                    结伴巡护{PATROL_STATUS_LABELS[activeOrder.status]}
+                  </h2>
+                  <p className="text-xs text-ink-light">
+                    {activeOrder.members.filter((m) => !m.leftAt).length} 名成员在岗
+                  </p>
+                </div>
+              </div>
+              {activeOrder.status === 'paused' ? (
+                <p className="text-xs text-ochre">
+                  {activeOrder.pauseReason}，进度已保留，前往巡护单恢复
+                </p>
+              ) : (
+                <p className="text-xs text-ink-light">
+                  点击查看成员到达与分工完成情况
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
             <h2 className="font-serif text-lg font-semibold text-deep-brown mb-4">
               分时段体验
